@@ -1,0 +1,10 @@
+passlib[bcrypt]
+pyjwt
+python-multipart
+fastapi
+uvicorn
+pillow
+ffmpeg-python
+databases[sqlite]
+sqlalchemy
+cairosvg
