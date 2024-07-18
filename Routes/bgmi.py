@@ -152,6 +152,11 @@ def checkEnrollment(enroll: str):
     return True
 
 
+@router.get("/verifyEnrollment/{enroll}")
+def getTeams(enroll: str):
+    return checkEnrollment(enroll)
+
+
 @router.post("/register")
 async def register(
     tournament_id: str = Form(...),
