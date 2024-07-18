@@ -15,6 +15,7 @@ from db import engine, get_db
 from config import ACCESS_TOKEN_EXPIRE_MINUTES
 from sqlalchemy.orm import Session
 from models import Token, User
+from Routes.bgmi import router as BgmiRouter
 from utils import (
     authenticate_user,
     create_access_token,
@@ -33,6 +34,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(BgmiRouter)
 
 
 # # Base.metadata.create_all(bind=engine)
