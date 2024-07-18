@@ -91,6 +91,7 @@ class BgmiPlayers(Base):
     mobile = Column(String)
     email = Column(String)
     age = Column(Integer)
+    enrollNo = Column(String)
     city = Column(String)
     college = Column(String)
     is_joined = Column(Boolean, server_default=text("false"))

@@ -7,6 +7,7 @@ from Routes.models_bgmi import Player, TeamList
 from schemas import BgmiMatches, TeamTable, BgmiPlayers, TournamentTable
 from sqlalchemy.orm import Session
 from db import get_db
+import requests
 
 router = APIRouter(prefix="/bgmi", tags=["BGMI"])
 
@@ -139,6 +140,18 @@ def getMatches(
     return res
 
 
+def checkEnrollment(enroll: str):
+    data = requests.get(
+        f"https://api.airtable.com/v0/appwU8yBYoG1yhBXx/TBL_STUDENT?fields%5B%5D=enrollment_number&filterByFormula=FIND('{enroll}',enrollment_number)",
+        headers={
+            "Authorization": "Bearer patCZjaKmxphLgU7n.352e40422482c2ddc32a600c2d17d7e92b15f3eb3aa50fb884088f8d1329bb5a"
+        },
+    )
+    if len(data.json()["records"]) == 0:
+        return False
+    return True
+
+
 @router.post("/register")
 async def register(
     tournament_id: str = Form(...),
@@ -170,8 +183,9 @@ async def register(
         with open(f"media/{teamId}_{logo.filename}", "wb") as f:
             f.write(logo.file.read())
     for player in playersJson:
+        if not checkEnrollment(player["enrollNo"]):
+            raise HTTPException(422, "Invalid Enrollment Number")
         if player["game_id"] not in gameId:
-
             newPlayer = BgmiPlayers(
                 id=uuid.uuid4(),
                 team_id=teamId,
@@ -180,6 +194,7 @@ async def register(
                 game_id=player["game_id"],
                 captain=player["captain"],
                 mobile=player["mobile"],
+                enrollNo=player["enrollNo"],
                 email=player["email"],
                 age=player["age"],
                 city=player["city"],
@@ -188,8 +203,9 @@ async def register(
                 rank=0,
             )
             db.add(newPlayer)
+            gameId.add(player["game_id"])
         else:
-            raise Exception("Duplicate game id Found")
+            raise HTTPException(422, "Duplicate game id Found")
     db.commit()
     newTeam.players
     return {"message": newTeam}
