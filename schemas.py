@@ -72,10 +72,32 @@ class BgmiMatches(Base):
     map = Column(String)
     mode = Column(String)
     match_date = Column(DateTime)
+    mvp_player_id = Column(
+        UUID(as_uuid=True), ForeignKey("bgmi_players.id"), nullable=True
+    )
     match_status = Column(String, server_default=text("pending"))
     created_at = Column(TIMESTAMP(timezone=True), server_default=text("now()"))
 
     tournament = relationship("TournamentTable", back_populates="matches")
+    matchTeam = relationship("MatchTeams", back_populates="match")
+
+
+class MatchTeams(Base):
+    __tablename__ = "match_players"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
+    match_id = Column(UUID(as_uuid=True), ForeignKey("bgmi_matches.id"))
+    team_id = Column(UUID(as_uuid=True), ForeignKey("teams.id"))
+    player_id = Column(UUID(as_uuid=True), ForeignKey("bgmi_players.id"))
+    is_joined = Column(Boolean, server_default=text("false"))
+    kill = Column(Integer, server_default=text("0"))
+    rank = Column(Integer, server_default=text("0"))
+    is_dead = Column(Boolean, server_default=text("false"))
+    created_at = Column(TIMESTAMP(timezone=True), server_default=text("now()"))
+
+    match = relationship("BgmiMatches", back_populates="matchTeam")
+    team = relationship("TeamTable", back_populates="match")
+    player = relationship("BgmiPlayers", back_populates="match")
 
 
 class BgmiPlayers(Base):
@@ -102,6 +124,7 @@ class BgmiPlayers(Base):
     verified = Column(Boolean, server_default=text("false"))
     team = relationship("TeamTable", back_populates="players")
     tournament = relationship("TournamentTable", back_populates="players")
+    match = relationship("MatchTeams", back_populates="player")
 
 
 class TeamTable(Base):
@@ -123,3 +146,4 @@ class TeamTable(Base):
     )
 
     tournament = relationship("TournamentTable", back_populates="team")
+    match = relationship("MatchTeams", back_populates="team")
