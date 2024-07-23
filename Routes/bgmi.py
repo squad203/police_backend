@@ -2,6 +2,7 @@ import json
 from typing import List, Optional
 import uuid
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, WebSocket
+from fastapi.responses import FileResponse
 from pydantic import EmailStr
 from Routes.models_bgmi import Player, TeamList
 from schemas import BgmiMatches, MatchTeams, TeamTable, BgmiPlayers, TournamentTable
@@ -234,6 +235,11 @@ async def register(
     db.commit()
     newTeam.players
     return {"message": newTeam}
+
+
+@router.get("/logo/{file_name}")
+def get_logo(file_name: str):
+    return FileResponse(f"media/{file_name}")
 
 
 @router.get("/getTeams")
