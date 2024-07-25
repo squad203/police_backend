@@ -499,24 +499,48 @@ def getPlayers(match_id: uuid.UUID = None, db: Session = Depends(get_db)):
 
 
 @router.get("/getTeamsRanking")
-def getTeams(
-    match_id: Optional[uuid.UUID | None] = None, db: Session = Depends(get_db)
-):
-    if not tournament_id:
-        tournament_id = getTournamentId(db)
-    data = db.query(MatchTeams).filter(TeamTable.match == match_id).all()
+def getTeams(match_id: uuid.UUID, db: Session = Depends(get_db)):
+    data = db.query(MatchTeams).filter(MatchTeams.match_id == match_id).all()
     res = []
+    team_data = {}
     for i in data:
-        alive = 0
-        total_kill = 0
-        for player in i.player:
-            if not player.is_dead:
-                alive += 1
-            total_kill += player.kill
-        i.kills = total_kill
-        res.append((i, alive, total_kill))
-    res.sort(key=lambda x: (-x[1], -x[2], x[0].created_at))
-    return [team for team, _, _ in res]
+        if i.team_id not in team_data:
+            team_data[i.team_id] = {
+                "team_id": i.team_id,
+                "teamName": i.team.teamName,
+                "logo": i.team.logo,
+                "players": [],
+                "alive": 0,
+                "kill": 0,
+            }
+        if not i.is_dead:
+            team_data[i.team_id]["alive"] += 1
+        if i.kill:
+            team_data[i.team_id]["kill"] += i.kill
+        team_data[i.team_id]["players"].append(
+            {
+                "is_dead": i.is_dead,
+            }
+        )
+
+    print(team_data)
+
+    for team_id, team_info in team_data.items():
+        res.append(
+            {
+                "team_id": team_id,
+                "teamName": team_info["teamName"],
+                "logo": team_info["logo"],
+                "kill": team_info["kill"],
+                "players": team_info["alive"],
+                "is_eliminated": False if team_info["alive"] > 0 else True,
+                "alive": sorted(team_info["players"], key=lambda x: x["is_dead"]),
+            }
+        )
+
+    res.sort(key=lambda x: (-x["players"], -x["kill"]))
+    # res.sort(key=lambda x: (-x["kill"], -x["players"]))
+    return res
 
 
 # @router.websocket("/ws")
