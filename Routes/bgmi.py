@@ -476,7 +476,7 @@ def getPlayers(match_id: uuid.UUID = None, db: Session = Depends(get_db)):
 
     if match_id:
         data = data.filter(MatchTeams.match_id == match_id)
-    data = data.order_by(MatchTeams.is_dead, MatchTeams.kill.desc()).all()
+    data = data.order_by(MatchTeams.is_dead, MatchTeams.kill.desc()).limit(10).all()
     res = []
     for i in data:
         res.append(
