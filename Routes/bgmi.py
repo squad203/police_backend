@@ -4,6 +4,7 @@ import uuid
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, WebSocket
 from fastapi.responses import FileResponse
 from pydantic import EmailStr
+from uuid import UUID
 from Routes.models_bgmi import Player, TeamList
 from schemas import BgmiMatches, MatchTeams, TeamTable, BgmiPlayers, TournamentTable
 from sqlalchemy.orm import Session
@@ -161,6 +162,113 @@ def getMatches(
     return res
 
 
+@router.post("/addTeamInMatch/{match_id}/{team_id}")
+def addTeamInMatch(team_id: UUID, match_id: UUID, db: Session = Depends(get_db)):
+
+    inMatch = db.query(MatchTeams).filter(MatchTeams.team_id == team_id)
+    if inMatch.first():
+        inMatch.delete()
+        db.commit()
+        return {"message": "Team Removed from Match"}
+    player = db.query(BgmiPlayers).filter(BgmiPlayers.team_id == team_id).all()
+    if not player:
+        raise HTTPException(status_code=404, detail="Team Not Found")
+    for i in player:
+        db.add(MatchTeams(match_id=match_id, team_id=team_id, player_id=i.id))
+
+    db.commit()
+
+    return {"message": "Team Added to Match"}
+
+
+@router.get("/getMatchPlayers/{match_id}")
+def getMatchPlayers(match_id: UUID, db: Session = Depends(get_db)):
+    data = db.query(MatchTeams).filter(MatchTeams.match_id == match_id).all()
+    res = []
+    team_data = {}
+    for i in data:
+        if i.team_id not in team_data:
+            team_data[i.team_id] = {
+                "team_id": i.team_id,
+                "teamName": i.team.teamName,
+                "logo": i.team.logo,
+                "players": [],
+            }
+        team_data[i.team_id]["players"].append(
+            {
+                "id": i.id,
+                "player_id": i.player_id,
+                "player_name": i.player.player_name,
+                "game_id": i.player.game_id,
+                "captain": i.player.captain,
+                "is_joined": i.is_joined,
+                "kill": i.kill,
+                "rank": i.rank,
+                "is_dead": i.is_dead,
+            }
+        )
+
+    for team_id, team_info in team_data.items():
+        res.append(
+            {
+                "team_id": team_id,
+                "teamName": team_info["teamName"],
+                "logo": team_info["logo"],
+                "players": sorted(team_info["players"], key=lambda x: x["player_name"]),
+            }
+        )
+
+    return res
+
+
+@router.get("/getTeams/{matchId}/{teamsId}")
+def getTeams(matchId: UUID, teamsId: str, db: Session = Depends(get_db)):
+    teamsId = teamsId.split(",")
+    data = []
+    if matchId:
+        for i in teamsId:
+
+            data.extend(
+                db.query(MatchTeams)
+                .filter(MatchTeams.match_id == matchId, MatchTeams.team_id == i)
+                .all()
+            )
+    res = []
+    team_data = {}
+    for i in data:
+        if i.team_id not in team_data:
+            team_data[i.team_id] = {
+                "team_id": i.team_id,
+                "teamName": i.team.teamName,
+                "logo": i.team.logo,
+                "players": [],
+            }
+        team_data[i.team_id]["players"].append(
+            {
+                "id": i.id,
+                "plater_id": i.player_id,
+                "player_name": i.player.player_name,
+                "game_id": i.player.game_id,
+                "captain": i.player.captain,
+                "is_joined": i.is_joined,
+                "kill": i.kill,
+                "rank": i.rank,
+                "is_dead": i.is_dead,
+            }
+        )
+
+    for team_id, team_info in team_data.items():
+        res.append(
+            {
+                "team_id": team_id,
+                "teamName": team_info["teamName"],
+                "logo": team_info["logo"],
+                "players": team_info["players"].sort(key=lambda x: x["player_name"]),
+            }
+        )
+    return res
+
+
 def checkEnrollment(enroll: str):
     data = requests.get(
         f"https://api.airtable.com/v0/appwU8yBYoG1yhBXx/TBL_STUDENT?fields%5B%5D=enrollment_number&filterByFormula=FIND('{enroll}',enrollment_number)",
@@ -255,8 +363,23 @@ def getTeams(
             .order_by(TeamTable.created_at)
             .all()
         )
+
     res = []
     for i in data:
+        match_ = db.query(MatchTeams).filter(MatchTeams.team_id == i.id).all()
+        match = []
+        match_id = set()
+        if match_:
+            for j in match_:
+                if j.match_id not in match_id:
+                    match_id.add(j.match_id)
+                    match.append(
+                        {
+                            "match_id": j.match_id,
+                            "match_name": j.match.match_name,
+                            "match_date": j.match.match_date,
+                        }
+                    )
         total_kill = 0
         verify = True
         for player in i.players:
@@ -267,6 +390,8 @@ def getTeams(
             {
                 "id": i.id,
                 "teamName": i.teamName,
+                "match": match,
+                "match_id": match_id,
                 "email": i.email,
                 "mobile": i.mobile,
                 "city": i.city,
@@ -332,7 +457,7 @@ def toggleIsJoined(player_id: uuid.UUID, type: str, db: Session = Depends(get_db
         raise HTTPException(status_code=404, detail="Player Not Found")
     if type == "add":
         if player.kill is None:
-            player.kill = 1
+            player.kill = 10
         else:
             player.kill += 1
     elif type == "remove":
@@ -380,16 +505,12 @@ def getTeams(
 ):
     if not tournament_id:
         tournament_id = getTournamentId(db)
-    data = (
-        db.query(MatchTeams.team_id.distinct())
-        .filter(TeamTable.match == match_id)
-        .all()
-    )
+    data = db.query(MatchTeams).filter(TeamTable.match == match_id).all()
     res = []
     for i in data:
         alive = 0
         total_kill = 0
-        for player in i.players:
+        for player in i.player:
             if not player.is_dead:
                 alive += 1
             total_kill += player.kill
