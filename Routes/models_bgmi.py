@@ -8,13 +8,13 @@ class Player(BaseModel):
 
     player_name: str | None
     game_id: str | None
-    captain: bool | None
-    mobile: str | None
-    email: EmailStr | None
-    age: int | None
-    city: str | None
-    college: str | None
-    is_joined: bool | None
+    # captain: bool | None
+    # mobile: str | None
+    # email: EmailStr | None
+    # age: int | None
+    # city: str | None
+    # college: str | None
+    # is_joined: bool | None
     is_dead: bool | None
     kill: int | None
 

@@ -470,14 +470,12 @@ def toggleIsJoined(player_id: uuid.UUID, type: str, db: Session = Depends(get_db
     return {"message": "Is Joined Toggled"}
 
 
-@router.get("/getPlayers", response_model=List[Player])
-def getPlayers(
-    team_id: Optional[uuid.UUID | None] = None, db: Session = Depends(get_db)
-):
+@router.get("/getPlayers/", response_model=List[Player])
+def getPlayers(match_id: uuid.UUID = None, db: Session = Depends(get_db)):
     data = db.query(MatchTeams)
 
-    if team_id:
-        data = data.filter(MatchTeams.team_id == team_id)
+    if match_id:
+        data = data.filter(MatchTeams.match_id == match_id)
     data = data.order_by(MatchTeams.is_dead, MatchTeams.kill.desc()).all()
     res = []
     for i in data:
@@ -486,13 +484,13 @@ def getPlayers(
                 id=i.id,
                 player_name=i.player.player_name,
                 game_id=i.player.game_id,
-                captain=i.player.captain,
-                mobile=i.player.mobile,
-                email=i.player.email,
-                age=i.player.age,
-                city=i.player.city,
-                college=i.player.college,
-                is_joined=i.is_joined,
+                # captain=i.player.captain,
+                # mobile=i.player.mobile,
+                # email=i.player.email,
+                # age=i.player.age,
+                # city=i.player.city,
+                # college=i.player.college,
+                # is_joined=i.is_joined,
                 is_dead=i.is_dead,
                 kill=i.kill,
             )
