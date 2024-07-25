@@ -226,13 +226,12 @@ def getTeams(matchId: UUID, teamsId: str, db: Session = Depends(get_db)):
     teamsId = teamsId.split(",")
     data = []
     if matchId:
-        for i in teamsId:
+        data = (
+            db.query(MatchTeams)
+            .filter(MatchTeams.match_id == matchId, MatchTeams.team_id.in_(teamsId))
+            .all()
+        )
 
-            data.extend(
-                db.query(MatchTeams)
-                .filter(MatchTeams.match_id == matchId, MatchTeams.team_id == i)
-                .all()
-            )
     res = []
     team_data = {}
     for i in data:
@@ -257,13 +256,15 @@ def getTeams(matchId: UUID, teamsId: str, db: Session = Depends(get_db)):
             }
         )
 
+    print(team_data)
+
     for team_id, team_info in team_data.items():
         res.append(
             {
                 "team_id": team_id,
                 "teamName": team_info["teamName"],
                 "logo": team_info["logo"],
-                "players": team_info["players"].sort(key=lambda x: x["player_name"]),
+                "players": sorted(team_info["players"], key=lambda x: x["player_name"]),
             }
         )
     return res
