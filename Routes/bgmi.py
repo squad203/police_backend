@@ -267,7 +267,7 @@ def getTeams(matchId: UUID, teamsId: str, db: Session = Depends(get_db)):
                 "players": sorted(team_info["players"], key=lambda x: x["player_name"]),
             }
         )
-    return res
+    return sorted(res, key=lambda x: x["teamName"])
 
 
 def checkEnrollment(enroll: str):
