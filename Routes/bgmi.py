@@ -509,6 +509,7 @@ def getTeams(match_id: uuid.UUID, db: Session = Depends(get_db)):
                 "team_id": i.team_id,
                 "teamName": i.team.teamName,
                 "logo": i.team.logo,
+                "rank": i.team.rank,
                 "players": [],
                 "alive": 0,
                 "kill": 0,
