@@ -555,7 +555,7 @@ def getTeams(match_id: uuid.UUID, db: Session = Depends(get_db)) -> List[dict]:
         dead_at_timestamp = (
             item["dead_at"].timestamp() if item["dead_at"] is not None else float("inf")
         )
-        return (-item["players"], -item["kill"], -dead_at_timestamp)
+        return (-item["players"], -item["kill"], dead_at_timestamp)
 
     res.sort(key=sort_key)
     return res
