@@ -1,3 +1,4 @@
+from datetime import datetime
 import json
 from typing import List, Optional
 import uuid
@@ -446,6 +447,8 @@ def toggleIsDead(player_id: uuid.UUID, db: Session = Depends(get_db)):
     player = db.query(MatchTeams).filter(MatchTeams.id == player_id).first()
     if not player:
         raise HTTPException(status_code=404, detail="Player Not Found")
+    if not player.is_dead:
+        player.dead_at = datetime.now()
     player.is_dead = not player.is_dead
     db.commit()
     return {"message": "Is Dead Toggled"}
@@ -476,7 +479,7 @@ def getPlayers(match_id: uuid.UUID = None, db: Session = Depends(get_db)):
 
     if match_id:
         data = data.filter(MatchTeams.match_id == match_id)
-    data = data.order_by(MatchTeams.is_dead, MatchTeams.kill.desc()).all()
+    data = data.order_by(MatchTeams.dead_at, MatchTeams.kill.desc()).all()
     res = []
     for i in data:
         res.append(
@@ -484,6 +487,8 @@ def getPlayers(match_id: uuid.UUID = None, db: Session = Depends(get_db)):
                 id=i.id,
                 player_name=i.player.player_name,
                 game_id=i.player.game_id,
+                is_dead=i.is_dead,
+                kill=i.kill,
                 # captain=i.player.captain,
                 # mobile=i.player.mobile,
                 # email=i.player.email,
@@ -491,15 +496,13 @@ def getPlayers(match_id: uuid.UUID = None, db: Session = Depends(get_db)):
                 # city=i.player.city,
                 # college=i.player.college,
                 # is_joined=i.is_joined,
-                is_dead=i.is_dead,
-                kill=i.kill,
             )
         )
     return res
 
 
 @router.get("/getTeamsRanking")
-def getTeams(match_id: uuid.UUID, db: Session = Depends(get_db)):
+def getTeams(match_id: uuid.UUID, db: Session = Depends(get_db)) -> List[dict]:
     data = db.query(MatchTeams).filter(MatchTeams.match_id == match_id).all()
     res = []
     team_data = {}
@@ -512,10 +515,18 @@ def getTeams(match_id: uuid.UUID, db: Session = Depends(get_db)):
                 "rank": i.team.rank,
                 "players": [],
                 "alive": 0,
+                "dead_at": None,
                 "kill": 0,
             }
         if not i.is_dead:
             team_data[i.team_id]["alive"] += 1
+        else:
+            if team_data[i.team_id]["dead_at"] is None:
+                team_data[i.team_id]["dead_at"] = i.dead_at
+            else:
+                team_data[i.team_id]["dead_at"] = max(
+                    i.dead_at, team_data[i.team_id]["dead_at"]
+                )
         if i.kill:
             team_data[i.team_id]["kill"] += i.kill
         team_data[i.team_id]["players"].append(
@@ -523,8 +534,6 @@ def getTeams(match_id: uuid.UUID, db: Session = Depends(get_db)):
                 "is_dead": i.is_dead,
             }
         )
-
-    print(team_data)
 
     for team_id, team_info in team_data.items():
         res.append(
@@ -535,13 +544,20 @@ def getTeams(match_id: uuid.UUID, db: Session = Depends(get_db)):
                 "kill": team_info["kill"],
                 "rank": team_info["rank"],
                 "players": team_info["alive"],
+                "dead_at": team_info["dead_at"],
                 "is_eliminated": False if team_info["alive"] > 0 else True,
                 "alive": sorted(team_info["players"], key=lambda x: x["is_dead"]),
             }
         )
 
-    res.sort(key=lambda x: (-x["players"], -x["kill"]))
-    # res.sort(key=lambda x: (-x["kill"], -x["players"]))
+    def sort_key(item):
+        # Convert dead_at to a timestamp or use float('inf') if it is None
+        dead_at_timestamp = (
+            item["dead_at"].timestamp() if item["dead_at"] is not None else float("inf")
+        )
+        return (-item["players"], -dead_at_timestamp, -item["kill"])
+
+    res.sort(key=sort_key)
     return res
 
 

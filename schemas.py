@@ -93,6 +93,7 @@ class MatchTeams(Base):
     kill = Column(Integer, server_default=text("0"))
     rank = Column(Integer, server_default=text("0"))
     is_dead = Column(Boolean, server_default=text("false"))
+    dead_at = Column(DateTime, nullable=True)
     created_at = Column(TIMESTAMP(timezone=True), server_default=text("now()"))
 
     match = relationship("BgmiMatches", back_populates="matchTeam")
