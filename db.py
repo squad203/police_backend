@@ -10,7 +10,7 @@ engine = create_engine(
     pool_size=500,
     pool_timeout=30,
     max_overflow=10,
-    echo=True,
+    # echo=True,
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()

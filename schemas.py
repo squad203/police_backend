@@ -13,7 +13,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 from db import Base
 
-from sqlalchemy import ARRAY
+from sqlalchemy.dialects.postgresql import ARRAY
 
 
 class UserTable(Base):
@@ -26,6 +26,29 @@ class UserTable(Base):
     disabled = Column(Boolean, server_default=text("false"))
     hashed_password = Column(String)
     permissions = Column(String, server_default="*")
+
+
+class OrganizationTable(Base):
+    __tablename__ = "organizations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True)
+    email = Column(String, unique=True)
+    mobile = Column(String, unique=True)
+    games = Column(ARRAY(String))
+    address = Column(String)
+    city = Column(String)
+    state = Column(String)
+    country = Column(String)
+    logo_file = Column(String)
+    active = Column(Boolean, server_default=text("true"))
+    password = Column(String)
+    permissions = Column(String, server_default="*")
+
+    created_at = Column(TIMESTAMP(timezone=True), server_default=text("now()"))
+    updated_at = Column(
+        TIMESTAMP(timezone=True), server_default=text("now()"), onupdate=text("now()")
+    )
 
 
 class TournamentTable(Base):
@@ -51,7 +74,6 @@ class TournamentTable(Base):
 
     team = relationship("TeamTable", back_populates="tournament")
     matches = relationship("BgmiMatches", back_populates="tournament")
-    players = relationship("BgmiPlayers", back_populates="tournament")
     # end_date = Column(DateTime)
     # mode = Column(String)
     # map = Column(String)
@@ -93,38 +115,43 @@ class MatchTeams(Base):
     kill = Column(Integer, server_default=text("0"))
     rank = Column(Integer, server_default=text("0"))
     is_dead = Column(Boolean, server_default=text("false"))
+    dead_at = Column(DateTime, nullable=True)
     created_at = Column(TIMESTAMP(timezone=True), server_default=text("now()"))
 
     match = relationship("BgmiMatches", back_populates="matchTeam")
     team = relationship("TeamTable", back_populates="match")
-    player = relationship("BgmiPlayers", back_populates="match")
 
 
-class BgmiPlayers(Base):
-    __tablename__ = "bgmi_players"
+class PlayerTable(Base):
+    __tablename__ = "players"
 
     id = Column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
-    tournament_id = Column(UUID(as_uuid=True), ForeignKey("tournaments.id"))
-
-    team_id = Column(UUID(as_uuid=True), ForeignKey("teams.id"))
     player_name = Column(String)
-    game_id = Column(String)
-    captain = Column(Boolean, server_default=text("false"))
-    mobile = Column(String)
-    email = Column(String)
+    mobile = Column(String, unique=True)
+    email = Column(String, unique=True)
     age = Column(Integer)
-    enrollNo = Column(String)
     city = Column(String)
     college = Column(String)
-    is_joined = Column(Boolean, server_default=text("false"))
-    kill = Column(Integer, server_default=text("0"))
-    rank = Column(Integer, server_default=text("0"))
-    is_dead = Column(Boolean, server_default=text("false"))
+    discord = Column(String)
+    password = Column(String)
+    active = Column(Boolean, server_default=text("false"))
     created_at = Column(TIMESTAMP(timezone=True), server_default=text("now()"))
-    verified = Column(Boolean, server_default=text("false"))
-    team = relationship("TeamTable", back_populates="players")
-    tournament = relationship("TournamentTable", back_populates="players")
-    match = relationship("MatchTeams", back_populates="player")
+
+    game_info = relationship("PlayerGameInfo", back_populates="player")
+
+
+class PlayerGameInfo(Base):
+    __tablename__ = "player_game_info"
+
+    id = Column(Integer, primary_key=True, index=True)
+    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"))
+    game = Column(String, unique=True)
+    game_id = Column(String, unique=True)
+    game_name = Column(String, unique=True)
+    created_at = Column(TIMESTAMP(timezone=True), server_default=text("now()"))
+    updated_at = Column(TIMESTAMP(timezone=True), server_default=text("now()"))
+
+    player = relationship("PlayerTable", back_populates="game_info")
 
 
 class TeamTable(Base):
@@ -141,9 +168,6 @@ class TeamTable(Base):
     kills = Column(Integer)
     payment_received = Column(Boolean, server_default=text("false"))
     created_at = Column(TIMESTAMP(timezone=True), server_default=text("now()"))
-    players = relationship(
-        "BgmiPlayers", back_populates="team", order_by="BgmiPlayers.player_name"
-    )
 
     tournament = relationship("TournamentTable", back_populates="team")
     match = relationship("MatchTeams", back_populates="team")

@@ -3,18 +3,30 @@ from pydantic import BaseModel, EmailStr
 from uuid import UUID
 
 
+class OrganizationRegister(BaseModel):
+    name: str | None
+    games: List[str]
+    mobile: str | None
+    email: EmailStr | None
+    address: str | None
+    city: str | None
+    state: str | None
+    country: str | None
+    password: str | None
+
+
 class Player(BaseModel):
     id: UUID | None
 
     player_name: str | None
     game_id: str | None
-    captain: bool | None
-    mobile: str | None
-    email: EmailStr | None
-    age: int | None
-    city: str | None
-    college: str | None
-    is_joined: bool | None
+    # captain: bool | None
+    # mobile: str | None
+    # email: EmailStr | None
+    # age: int | None
+    # city: str | None
+    # college: str | None
+    # is_joined: bool | None
     is_dead: bool | None
     kill: int | None
 

@@ -1,15 +1,32 @@
+from datetime import datetime
 import json
 from typing import List, Optional
 import uuid
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, WebSocket
+from fastapi.responses import FileResponse
 from pydantic import EmailStr
-from Routes.models_bgmi import Player, TeamList
-from schemas import BgmiMatches, MatchTeams, TeamTable, BgmiPlayers, TournamentTable
+from uuid import UUID
+from Routes.BGMI.models_bgmi import OrganizationRegister, Player, TeamList
+from schemas import (
+    BgmiMatches,
+    MatchTeams,
+    OrganizationTable,
+    TeamTable,
+    BgmiPlayers,
+    TournamentTable,
+)
 from sqlalchemy.orm import Session
 from db import get_db
 import requests
 
+from utils import get_password_hash
+
+from .org.org_route import router as OrgRouter
+
 router = APIRouter(prefix="/bgmi", tags=["BGMI"])
+
+
+router.include_router(OrgRouter)
 
 
 def getTournamentId(db: Session):
@@ -160,6 +177,114 @@ def getMatches(
     return res
 
 
+@router.post("/addTeamInMatch/{match_id}/{team_id}")
+def addTeamInMatch(team_id: UUID, match_id: UUID, db: Session = Depends(get_db)):
+
+    inMatch = db.query(MatchTeams).filter(MatchTeams.team_id == team_id)
+    if inMatch.first():
+        inMatch.delete()
+        db.commit()
+        return {"message": "Team Removed from Match"}
+    player = db.query(BgmiPlayers).filter(BgmiPlayers.team_id == team_id).all()
+    if not player:
+        raise HTTPException(status_code=404, detail="Team Not Found")
+    for i in player:
+        db.add(MatchTeams(match_id=match_id, team_id=team_id, player_id=i.id))
+
+    db.commit()
+
+    return {"message": "Team Added to Match"}
+
+
+@router.get("/getMatchPlayers/{match_id}")
+def getMatchPlayers(match_id: UUID, db: Session = Depends(get_db)):
+    data = db.query(MatchTeams).filter(MatchTeams.match_id == match_id).all()
+    res = []
+    team_data = {}
+    for i in data:
+        if i.team_id not in team_data:
+            team_data[i.team_id] = {
+                "team_id": i.team_id,
+                "teamName": i.team.teamName,
+                "logo": i.team.logo,
+                "players": [],
+            }
+        team_data[i.team_id]["players"].append(
+            {
+                "id": i.id,
+                "player_id": i.player_id,
+                "player_name": i.player.player_name,
+                "game_id": i.player.game_id,
+                "captain": i.player.captain,
+                "is_joined": i.is_joined,
+                "kill": i.kill,
+                "rank": i.rank,
+                "is_dead": i.is_dead,
+            }
+        )
+
+    for team_id, team_info in team_data.items():
+        res.append(
+            {
+                "team_id": team_id,
+                "teamName": team_info["teamName"],
+                "logo": team_info["logo"],
+                "players": sorted(team_info["players"], key=lambda x: x["player_name"]),
+            }
+        )
+
+    return res
+
+
+@router.get("/getTeams/{matchId}/{teamsId}")
+def getTeams(matchId: UUID, teamsId: str, db: Session = Depends(get_db)):
+    teamsId = teamsId.split(",")
+    data = []
+    if matchId:
+        data = (
+            db.query(MatchTeams)
+            .filter(MatchTeams.match_id == matchId, MatchTeams.team_id.in_(teamsId))
+            .all()
+        )
+
+    res = []
+    team_data = {}
+    for i in data:
+        if i.team_id not in team_data:
+            team_data[i.team_id] = {
+                "team_id": i.team_id,
+                "teamName": i.team.teamName,
+                "logo": i.team.logo,
+                "players": [],
+            }
+        team_data[i.team_id]["players"].append(
+            {
+                "id": i.id,
+                "plater_id": i.player_id,
+                "player_name": i.player.player_name,
+                "game_id": i.player.game_id,
+                "captain": i.player.captain,
+                "is_joined": i.is_joined,
+                "kill": i.kill,
+                "rank": i.rank,
+                "is_dead": i.is_dead,
+            }
+        )
+
+    print(team_data)
+
+    for team_id, team_info in team_data.items():
+        res.append(
+            {
+                "team_id": team_id,
+                "teamName": team_info["teamName"],
+                "logo": team_info["logo"],
+                "players": sorted(team_info["players"], key=lambda x: x["player_name"]),
+            }
+        )
+    return sorted(res, key=lambda x: x["teamName"])
+
+
 def checkEnrollment(enroll: str):
     data = requests.get(
         f"https://api.airtable.com/v0/appwU8yBYoG1yhBXx/TBL_STUDENT?fields%5B%5D=enrollment_number&filterByFormula=FIND('{enroll}',enrollment_number)",
@@ -236,6 +361,11 @@ async def register(
     return {"message": newTeam}
 
 
+@router.get("/logo/{file_name}")
+def get_logo(file_name: str):
+    return FileResponse(f"media/{file_name}")
+
+
 @router.get("/getTeams")
 def getTeams(
     tournament_id: Optional[uuid.UUID | None] = None, db: Session = Depends(get_db)
@@ -249,8 +379,23 @@ def getTeams(
             .order_by(TeamTable.created_at)
             .all()
         )
+
     res = []
     for i in data:
+        match_ = db.query(MatchTeams).filter(MatchTeams.team_id == i.id).all()
+        match = []
+        match_id = set()
+        if match_:
+            for j in match_:
+                if j.match_id not in match_id:
+                    match_id.add(j.match_id)
+                    match.append(
+                        {
+                            "match_id": j.match_id,
+                            "match_name": j.match.match_name,
+                            "match_date": j.match.match_date,
+                        }
+                    )
         total_kill = 0
         verify = True
         for player in i.players:
@@ -261,6 +406,8 @@ def getTeams(
             {
                 "id": i.id,
                 "teamName": i.teamName,
+                "match": match,
+                "match_id": match_id,
                 "email": i.email,
                 "mobile": i.mobile,
                 "city": i.city,
@@ -314,6 +461,8 @@ def toggleIsDead(player_id: uuid.UUID, db: Session = Depends(get_db)):
     player = db.query(MatchTeams).filter(MatchTeams.id == player_id).first()
     if not player:
         raise HTTPException(status_code=404, detail="Player Not Found")
+    if not player.is_dead:
+        player.dead_at = datetime.now()
     player.is_dead = not player.is_dead
     db.commit()
     return {"message": "Is Dead Toggled"}
@@ -326,7 +475,7 @@ def toggleIsJoined(player_id: uuid.UUID, type: str, db: Session = Depends(get_db
         raise HTTPException(status_code=404, detail="Player Not Found")
     if type == "add":
         if player.kill is None:
-            player.kill = 1
+            player.kill = 10
         else:
             player.kill += 1
     elif type == "remove":
@@ -338,15 +487,13 @@ def toggleIsJoined(player_id: uuid.UUID, type: str, db: Session = Depends(get_db
     return {"message": "Is Joined Toggled"}
 
 
-@router.get("/getPlayers", response_model=List[Player])
-def getPlayers(
-    team_id: Optional[uuid.UUID | None] = None, db: Session = Depends(get_db)
-):
+@router.get("/getPlayers/", response_model=List[Player])
+def getPlayers(match_id: uuid.UUID = None, db: Session = Depends(get_db)):
     data = db.query(MatchTeams)
 
-    if team_id:
-        data = data.filter(MatchTeams.team_id == team_id)
-    data = data.order_by(MatchTeams.is_dead, MatchTeams.kill.desc()).all()
+    if match_id:
+        data = data.filter(MatchTeams.match_id == match_id)
+    data = data.order_by(MatchTeams.dead_at, MatchTeams.kill.desc()).all()
     res = []
     for i in data:
         res.append(
@@ -354,43 +501,78 @@ def getPlayers(
                 id=i.id,
                 player_name=i.player.player_name,
                 game_id=i.player.game_id,
-                captain=i.player.captain,
-                mobile=i.player.mobile,
-                email=i.player.email,
-                age=i.player.age,
-                city=i.player.city,
-                college=i.player.college,
-                is_joined=i.is_joined,
                 is_dead=i.is_dead,
                 kill=i.kill,
+                # captain=i.player.captain,
+                # mobile=i.player.mobile,
+                # email=i.player.email,
+                # age=i.player.age,
+                # city=i.player.city,
+                # college=i.player.college,
+                # is_joined=i.is_joined,
             )
         )
     return res
 
 
 @router.get("/getTeamsRanking")
-def getTeams(
-    match_id: Optional[uuid.UUID | None] = None, db: Session = Depends(get_db)
-):
-    if not tournament_id:
-        tournament_id = getTournamentId(db)
-    data = (
-        db.query(MatchTeams.team_id.distinct())
-        .filter(TeamTable.match == match_id)
-        .all()
-    )
+def getTeams(match_id: uuid.UUID, db: Session = Depends(get_db)) -> List[dict]:
+    data = db.query(MatchTeams).filter(MatchTeams.match_id == match_id).all()
     res = []
+    team_data = {}
     for i in data:
-        alive = 0
-        total_kill = 0
-        for player in i.players:
-            if not player.is_dead:
-                alive += 1
-            total_kill += player.kill
-        i.kills = total_kill
-        res.append((i, alive, total_kill))
-    res.sort(key=lambda x: (-x[1], -x[2], x[0].created_at))
-    return [team for team, _, _ in res]
+        if i.team_id not in team_data:
+            team_data[i.team_id] = {
+                "team_id": i.team_id,
+                "teamName": i.team.teamName,
+                "logo": i.team.logo,
+                "rank": i.team.rank,
+                "players": [],
+                "alive": 0,
+                "dead_at": None,
+                "kill": 0,
+            }
+        if not i.is_dead:
+            team_data[i.team_id]["alive"] += 1
+        else:
+            if team_data[i.team_id]["dead_at"] is None:
+                team_data[i.team_id]["dead_at"] = i.dead_at
+            else:
+                team_data[i.team_id]["dead_at"] = max(
+                    i.dead_at, team_data[i.team_id]["dead_at"]
+                )
+        if i.kill:
+            team_data[i.team_id]["kill"] += i.kill
+        team_data[i.team_id]["players"].append(
+            {
+                "is_dead": i.is_dead,
+            }
+        )
+
+    for team_id, team_info in team_data.items():
+        res.append(
+            {
+                "team_id": team_id,
+                "teamName": team_info["teamName"],
+                "logo": team_info["logo"],
+                "kill": team_info["kill"],
+                "rank": team_info["rank"],
+                "players": team_info["alive"],
+                "dead_at": team_info["dead_at"],
+                "is_eliminated": False if team_info["alive"] > 0 else True,
+                "alive": sorted(team_info["players"], key=lambda x: x["is_dead"]),
+            }
+        )
+
+    def sort_key(item):
+        # Convert dead_at to a timestamp or use float('inf') if it is None
+        dead_at_timestamp = (
+            item["dead_at"].timestamp() if item["dead_at"] is not None else float("inf")
+        )
+        return (-item["players"], -dead_at_timestamp, -item["kill"])
+
+    res.sort(key=sort_key)
+    return res
 
 
 # @router.websocket("/ws")
