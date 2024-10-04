@@ -72,7 +72,7 @@ class TournamentTable(Base):
     created_at = Column(TIMESTAMP(timezone=True), server_default=text("now()"))
     updated_at = Column(TIMESTAMP(timezone=True), server_default=text("now()"))
 
-    team = relationship("TeamTable", back_populates="tournament")
+    # team = relationship("TeamTable", back_populates="tournament")
     matches = relationship("BgmiMatches", back_populates="tournament")
     # end_date = Column(DateTime)
     # mode = Column(String)
@@ -94,9 +94,9 @@ class BgmiMatches(Base):
     map = Column(String)
     mode = Column(String)
     match_date = Column(DateTime)
-    mvp_player_id = Column(
-        UUID(as_uuid=True), ForeignKey("bgmi_players.id"), nullable=True
-    )
+    # mvp_player_id = Column(
+    #     UUID(as_uuid=True), ForeignKey("bgmi_players.id"), nullable=True
+    # )
     match_status = Column(String, server_default=text("pending"))
     created_at = Column(TIMESTAMP(timezone=True), server_default=text("now()"))
 
@@ -110,7 +110,7 @@ class MatchTeams(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
     match_id = Column(UUID(as_uuid=True), ForeignKey("bgmi_matches.id"))
     team_id = Column(UUID(as_uuid=True), ForeignKey("teams.id"))
-    player_id = Column(UUID(as_uuid=True), ForeignKey("bgmi_players.id"))
+    # player_id = Column(UUID(as_uuid=True), ForeignKey("bgmi_players.id"))
     is_joined = Column(Boolean, server_default=text("false"))
     kill = Column(Integer, server_default=text("0"))
     rank = Column(Integer, server_default=text("0"))
@@ -119,25 +119,7 @@ class MatchTeams(Base):
     created_at = Column(TIMESTAMP(timezone=True), server_default=text("now()"))
 
     match = relationship("BgmiMatches", back_populates="matchTeam")
-    team = relationship("TeamTable", back_populates="match")
-
-
-class PlayerTable(Base):
-    __tablename__ = "players"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
-    player_name = Column(String)
-    mobile = Column(String, unique=True)
-    email = Column(String, unique=True)
-    age = Column(Integer)
-    city = Column(String)
-    college = Column(String)
-    discord = Column(String)
-    password = Column(String)
-    active = Column(Boolean, server_default=text("false"))
-    created_at = Column(TIMESTAMP(timezone=True), server_default=text("now()"))
-
-    game_info = relationship("PlayerGameInfo", back_populates="player")
+    # team = relationship("TeamTable", back_populates="match")
 
 
 class PlayerGameInfo(Base):
@@ -145,7 +127,7 @@ class PlayerGameInfo(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"))
-    game = Column(String, unique=True)
+    game = Column(String)
     game_id = Column(String, unique=True)
     game_name = Column(String, unique=True)
     created_at = Column(TIMESTAMP(timezone=True), server_default=text("now()"))
@@ -157,8 +139,9 @@ class PlayerGameInfo(Base):
 class TeamTable(Base):
     __tablename__ = "teams"
     id = Column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
-    tournament_id = Column(UUID(as_uuid=True), ForeignKey("tournaments.id"))
+    # tournament_id = Column(UUID(as_uuid=True), ForeignKey("tournaments.id"))
     teamName = Column(String)
+    teamCode = Column(String, nullable=True, unique=True)
     email = Column(String)
     mobile = Column(String)
     city = Column(String)
@@ -169,5 +152,29 @@ class TeamTable(Base):
     payment_received = Column(Boolean, server_default=text("false"))
     created_at = Column(TIMESTAMP(timezone=True), server_default=text("now()"))
 
-    tournament = relationship("TournamentTable", back_populates="team")
-    match = relationship("MatchTeams", back_populates="team")
+    # tournament = relationship("TournamentTable", back_populates="team")
+    # match = relationship("MatchTeams", back_populates="team")
+    players = relationship("PlayerTable", back_populates="team")
+
+
+class PlayerTable(Base):
+    __tablename__ = "players"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
+    team_code = Column(String, ForeignKey("teams.teamCode"), nullable=True)
+    player_name = Column(String)
+    enrollment_no = Column(String, unique=True)
+    mobile = Column(String, unique=True)
+    email = Column(String, unique=True)
+    age = Column(Integer)
+    city = Column(String)
+    college = Column(String)
+    discord = Column(String)
+    password = Column(String)
+    verified = Column(Boolean, server_default=text("false"))
+    active = Column(Boolean, server_default=text("false"))
+    created_at = Column(TIMESTAMP(timezone=True), server_default=text("now()"))
+    logged_in = Column(Boolean, server_default=text("false"))
+
+    game_info = relationship("PlayerGameInfo", back_populates="player")
+    team = relationship("TeamTable", back_populates="players")

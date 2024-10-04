@@ -6,8 +6,13 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from models import UserInDB, TokenData, User
 from db import get_db
-from config import SECRET_KEY, ALGORITHM
+from config import EMAIL_ADDR, EMAIL_PASSWORD, SECRET_KEY, ALGORITHM
 from schemas import UserTable
+
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+import time
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -86,3 +91,41 @@ async def get_current_active_user(current_user: User = Depends(get_current_user)
     if current_user.disabled:
         raise HTTPException(status_code=400, detail="Inactive user")
     return current_user
+
+
+def send_email(subject, body, email):
+
+    smtp_server = "smtp.gmail.com"
+    smtp_port = 587
+    sender_email = EMAIL_ADDR
+    password = EMAIL_PASSWORD
+
+    # List of recipients
+    recipient_emails = [email]
+
+    # Send emails in batches
+    batch_size = 10
+    delay_between_batches = 60  # Delay in seconds
+
+    for i in range(0, len(recipient_emails), batch_size):
+        batch = recipient_emails[i : i + batch_size]
+
+        for recipient_email in batch:
+            msg = MIMEMultipart()
+            msg["From"] = f"FF Registration <{sender_email}>"
+            msg["To"] = recipient_email
+            msg["Subject"] = subject
+            msg.attach(MIMEText(body, "html"))
+
+            try:
+                server = smtplib.SMTP(smtp_server, smtp_port)
+                server.starttls()
+                server.login(sender_email, password)
+                server.send_message(msg)
+                print(f"Email sent to {recipient_email}")
+            except Exception as e:
+                print(f"Failed to send email to {recipient_email}: {e}")
+            finally:
+                server.quit()
+
+        time.sleep(delay_between_batches)

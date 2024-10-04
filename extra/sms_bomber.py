@@ -212,11 +212,11 @@ def jojo(mobile):
     print(response.text)
 
 
-mobile = "8980833051"
+mobile = "7201895794"
 num = 1
 
 for i in range(num):
-    ghmc(mobile)
+    # ghmc(mobile)
     labour(mobile)
     messagecentral(mobile)
     jojo(mobile)
