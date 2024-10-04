@@ -556,7 +556,6 @@ def getTeams(match_id: uuid.UUID, db: Session = Depends(get_db)) -> List[dict]:
                 "teamName": team_info["teamName"],
                 "logo": team_info["logo"],
                 "kill": team_info["kill"],
-                "rank": team_info["rank"],
                 "players": team_info["alive"],
                 "dead_at": team_info["dead_at"],
                 "is_eliminated": False if team_info["alive"] > 0 else True,
