@@ -156,7 +156,7 @@ def register_team(
     background.add_task(
         send_email,
         f"Team Registration {team.team_name}",
-        f"You are successfully register with dronafoundation with team code <b style='color:red'>{teamCode}</b>. <br> <b>Note: </b> Use this code to fill other player information.<br><h2> || All the best for Tournament ||<h2> <br> <b>Best Regards<b><br><b>Drona Education Foundation</b>",
+        f"You are successfully register with dronafoundation with team code <b style='color:red'>{teamCode}</b>. <br> <b>Note: </b> Use this code to fill other player information. <a href='https://bgmiform.netlify.app/#/team_page/{teamCode}'>Click TO Register Player</a><br><h2> || All the best for Tournament ||<h2> <br> <b>Best Regards<b><br><b>Drona Education Foundation</b>",
         team.email,
     )
     return newTeam
