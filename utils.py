@@ -94,7 +94,7 @@ async def get_current_active_user(current_user: User = Depends(get_current_user)
 
 
 def send_email(subject, body, email):
-
+    print("Sending Mail To : ", email)
     smtp_server = "smtp.gmail.com"
     smtp_port = 587
     sender_email = EMAIL_ADDR
@@ -105,7 +105,6 @@ def send_email(subject, body, email):
 
     # Send emails in batches
     batch_size = 10
-    delay_between_batches = 60  # Delay in seconds
 
     for i in range(0, len(recipient_emails), batch_size):
         batch = recipient_emails[i : i + batch_size]
@@ -127,5 +126,3 @@ def send_email(subject, body, email):
                 print(f"Failed to send email to {recipient_email}: {e}")
             finally:
                 server.quit()
-
-        time.sleep(delay_between_batches)

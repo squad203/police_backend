@@ -149,6 +149,7 @@ class TeamTable(Base):
     logo = Column(String)
     rank = Column(Integer)
     kills = Column(Integer)
+    submitted = Column(Boolean, server_default=text("false"))
     payment_received = Column(Boolean, server_default=text("false"))
     created_at = Column(TIMESTAMP(timezone=True), server_default=text("now()"))
 

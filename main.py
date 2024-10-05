@@ -1,8 +1,11 @@
+import logging
 from multiprocessing import get_context
+from sqlite3 import IntegrityError
 import subprocess
-from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile
+from fastapi import FastAPI, Depends, HTTPException, Request, status, File, UploadFile
+from fastapi.exceptions import RequestValidationError
 from fastapi.security import OAuth2PasswordRequestForm
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image, UnidentifiedImageError
 import os
@@ -10,6 +13,8 @@ from io import BytesIO
 import tempfile
 import ffmpeg
 from datetime import timedelta
+
+from pydantic import ValidationError
 from schemas import Base, UserTable
 from db import engine, get_db
 from config import ACCESS_TOKEN_EXPIRE_MINUTES
@@ -22,6 +27,7 @@ from utils import (
     get_current_active_user,
     get_password_hash,
 )
+from fastapi.encoders import jsonable_encoder
 
 import cairosvg
 
@@ -34,6 +40,61 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    details = exc.errors()
+    modified_details = []
+    error_msg = ""
+    for error in details:
+
+        for i in error["loc"]:
+            print(i)
+            error_msg += str(i) + " --> "
+        error_msg += error["msg"] + " , " + error["type"]
+    return JSONResponse(
+        status_code=400,
+        content=jsonable_encoder({"detail": error_msg}),
+    )
+
+
+@app.exception_handler(HTTPException)
+async def validation_exception_handler(request: Request, exc: HTTPException):
+    logging.error("Http Exception : " + exc.detail)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=jsonable_encoder({"detail": exc.detail}),
+    )
+
+
+@app.exception_handler(IntegrityError)
+async def sqlalchemy_exception_handler(request: Request, exc: IntegrityError):
+    logging.error("SQL Alchemy Exception : " + str(exc))
+    return JSONResponse(
+        status_code=500,
+        content={"detail": exc.args},
+    )
+
+
+@app.exception_handler(Exception)
+async def custom_exception_handler(request: Request, exc: Exception):
+    logging.error("Other Exception : " + str(exc))
+
+    error_response = {"detail": str(exc)}
+    # Return a JSON response with the customized format
+    return JSONResponse(status_code=500, content=error_response)
+
+
+@app.exception_handler(ValidationError)
+async def custom_exception_handler(request: Request, exc: ValidationError):
+    # Customize the error response format
+    logging.error("Some Validation Error : " + str(exc))
+
+    error_response = {"detail": str(exc)}
+    # Return a JSON response with the customized format
+    return JSONResponse(status_code=500, content=error_response)
+
 
 app.include_router(BgmiRouter)
 

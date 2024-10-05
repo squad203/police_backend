@@ -62,7 +62,7 @@ def checkEnrollment(enroll: str):
 def check_already_register(
     mobile: str, email: str, team_name: str, team_code: str, db: Session
 ):
-
+    # check_already_register_player(mobile, email, db)
     team = db.query(TeamTable).filter(TeamTable.mobile == mobile).first()
     if team:
         raise HTTPException(
@@ -101,6 +101,19 @@ def check_already_register_player(mobile: str, email: str, db: Session):
             status_code=422, detail="Player with same email number already Registered"
         )
 
+def check_already_register_player_with_id(mobile: str, email: str, player_id:uuid.UUID,db: Session):
+
+    player = db.query(PlayerTable).filter(PlayerTable.mobile == mobile,PlayerTable.id != player_id).first()
+    if player:
+        raise HTTPException(
+            status_code=422, detail="Player with same mobile number already Registered"
+        )
+    player = db.query(PlayerTable).filter(PlayerTable.email == email,   PlayerTable.id != player_id).first()
+    if player:
+        raise HTTPException(
+            status_code=422, detail="Player with same email number already Registered"
+        )
+
 
 @router.post("/register/team")
 def register_team(
@@ -127,12 +140,11 @@ def register_team(
         logo=f"{teamCode}_{logo.filename}" if logo else None,
     )
     db.add(newTeam)
-    db.refresh(newTeam)
     db.commit()
     background.add_task(
         send_email,
         f"Team Registration {team.team_name}",
-        f"You are successfully register with dronafoundation with team code <b style='color:red'>{teamCode}<b>. <br> <b>Note: </b> Use this code to fill other player information.<br><h2> || All the best for Tournament ||<h2> <br> <b>Best Regards<b><br><b>Drona Education Foundation</b>",
+        f"You are successfully register with dronafoundation with team code <b style='color:red'>{teamCode}</b>. <br> <b>Note: </b> Use this code to fill other player information.<br><h2> || All the best for Tournament ||<h2> <br> <b>Best Regards<b><br><b>Drona Education Foundation</b>",
         team.email,
     )
     return newTeam
@@ -312,10 +324,11 @@ def update_player(
     )
     if not checkTeam:
         raise HTTPException(status_code=404, detail="Team Not Found")
-    if len(checkTeam.players) >= 4:
-        raise HTTPException(status_code=422, detail="Team is full")
+    if checkTeam.submitted:
+        raise HTTPException(status_code=422, detail="Team Already Submitted Meet admin to do changes")
 
-    check_already_register_player(reqData.mobile, reqData.email, db)
+
+    check_already_register_player_with_id(reqData.mobile, reqData.email, player_id, db)
     enroll_data = checkEnrollment(reqData.enrollNo)
     if not enroll_data["find"]:
         raise HTTPException(status_code=404, detail="Enrollment Not Found")
@@ -341,6 +354,54 @@ def update_player(
     db.commit()
     return reqData
 
+
+@router.get("/get_team/{team_code}")
+def get_team(team_code: str, db: Session = Depends(get_db)):
+    team = db.query(TeamTable).filter(TeamTable.teamCode == team_code).first()
+    if not team:
+        raise HTTPException(status_code=404, detail="Team Not Found")
+    team.players
+    return {
+        "id": team.id,
+        "teamName": team.teamName,
+        "teamCode": team.teamCode,
+        "logo": team.logo,
+        "players": team.players,
+        "email": team.email,
+        "mobile": team.mobile,
+        "city": team.city,
+        "college": team.college,
+        "submitted": team.submitted,
+        "pending":4- len(team.players) ,
+    }
+
+
+@router.get("/final_add/{team_code}")
+def final_add(team_code: str, db: Session = Depends(get_db)):
+    team = db.query(TeamTable).filter(TeamTable.teamCode == team_code).first()
+    if not team:
+        raise HTTPException(status_code=404, detail="Team Not Found")
+    if len(team.players) != 4:
+        raise HTTPException(status_code=422, detail="Team is not full")
+    team.submitted = True
+    db.commit()
+    return team
+@router.get("/reOpenTeam/{team_code}")
+def final_add(team_code: str, db: Session = Depends(get_db)):
+    team = db.query(TeamTable).filter(TeamTable.teamCode == team_code).first()
+    if not team:
+        raise HTTPException(status_code=404, detail="Team Not Found")
+    team.submitted = False
+    db.commit()
+    return team
+
+@router.get("/get_player/{id}")
+def get_player(id: uuid.UUID, db: Session = Depends(get_db)):
+    player = db.query(PlayerTable).filter(PlayerTable.id == id).first()
+    if not player:
+        raise HTTPException(status_code=404, detail="Player Not Found")
+    player.game_info
+    return player
 
 # @router.post("/")
 # def add_player(player: PlayersRegister, db: Session = Depends(get_db)):
