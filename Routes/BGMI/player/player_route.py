@@ -101,14 +101,25 @@ def check_already_register_player(mobile: str, email: str, db: Session):
             status_code=422, detail="Player with same email number already Registered"
         )
 
-def check_already_register_player_with_id(mobile: str, email: str, player_id:uuid.UUID,db: Session):
 
-    player = db.query(PlayerTable).filter(PlayerTable.mobile == mobile,PlayerTable.id != player_id).first()
+def check_already_register_player_with_id(
+    mobile: str, email: str, player_id: uuid.UUID, db: Session
+):
+
+    player = (
+        db.query(PlayerTable)
+        .filter(PlayerTable.mobile == mobile, PlayerTable.id != player_id)
+        .first()
+    )
     if player:
         raise HTTPException(
             status_code=422, detail="Player with same mobile number already Registered"
         )
-    player = db.query(PlayerTable).filter(PlayerTable.email == email,   PlayerTable.id != player_id).first()
+    player = (
+        db.query(PlayerTable)
+        .filter(PlayerTable.email == email, PlayerTable.id != player_id)
+        .first()
+    )
     if player:
         raise HTTPException(
             status_code=422, detail="Player with same email number already Registered"
@@ -201,7 +212,7 @@ def register_player(
     background.add_task(
         send_email,
         f"New Player Registration {reqData.player_name}",
-        f"New Player Registered in your team with name {enroll_data["name"]}<h2> || All the best for Tournament ||<h2> <br> <b>Best Regards<b><br><b>Drona Education Foundation</b> ",
+        f"New Player Registered in your team with name {enroll_data['name']}<h2> || All the best for Tournament ||<h2> <br> <b>Best Regards<b><br><b>Drona Education Foundation</b> ",
         checkTeam.email,
     )
     return reqData
@@ -325,8 +336,9 @@ def update_player(
     if not checkTeam:
         raise HTTPException(status_code=404, detail="Team Not Found")
     if checkTeam.submitted:
-        raise HTTPException(status_code=422, detail="Team Already Submitted Meet admin to do changes")
-
+        raise HTTPException(
+            status_code=422, detail="Team Already Submitted Meet admin to do changes"
+        )
 
     check_already_register_player_with_id(reqData.mobile, reqData.email, player_id, db)
     enroll_data = checkEnrollment(reqData.enrollNo)
@@ -372,7 +384,7 @@ def get_team(team_code: str, db: Session = Depends(get_db)):
         "city": team.city,
         "college": team.college,
         "submitted": team.submitted,
-        "pending":4- len(team.players) ,
+        "pending": 4 - len(team.players),
     }
 
 
@@ -386,6 +398,8 @@ def final_add(team_code: str, db: Session = Depends(get_db)):
     team.submitted = True
     db.commit()
     return team
+
+
 @router.get("/reOpenTeam/{team_code}")
 def final_add(team_code: str, db: Session = Depends(get_db)):
     team = db.query(TeamTable).filter(TeamTable.teamCode == team_code).first()
@@ -395,6 +409,7 @@ def final_add(team_code: str, db: Session = Depends(get_db)):
     db.commit()
     return team
 
+
 @router.get("/get_player/{id}")
 def get_player(id: uuid.UUID, db: Session = Depends(get_db)):
     player = db.query(PlayerTable).filter(PlayerTable.id == id).first()
@@ -402,6 +417,7 @@ def get_player(id: uuid.UUID, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Player Not Found")
     player.game_info
     return player
+
 
 # @router.post("/")
 # def add_player(player: PlayersRegister, db: Session = Depends(get_db)):
