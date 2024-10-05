@@ -198,42 +198,43 @@
 
 # @router.get("/getMatchPlayers/{match_id}")
 # def getMatchPlayers(match_id: UUID, db: Session = Depends(get_db)):
-# #     data = db.query(MatchTeams).filter(MatchTeams.match_id == match_id).all()
-# #     res = []
-# #     team_data = {}
-# #     for i in data:
-# #         if i.team_id not in team_data:
-# #             team_data[i.team_id] = {
-# #                 "team_id": i.team_id,
-# #                 "teamName": i.team.teamName,
-# #                 "logo": i.team.logo,
-# #                 "players": [],
-# #             }
-# #         team_data[i.team_id]["players"].append(
-# #             {
-# #                 "id": i.id,
-# #                 "player_id": i.player_id,
-# #                 "player_name": i.player.player_name,
-# #                 "game_id": i.player.game_id,
-# #                 "captain": i.player.captain,
-# #                 "is_joined": i.is_joined,
-# #                 "kill": i.kill,
-# #                 "rank": i.rank,
-# #                 "is_dead": i.is_dead,
-# #             }
-# #         )
+#     data = db.query(MatchTeams).filter(MatchTeams.match_id == match_id).all()
+#     res = []
+#     team_data = {}
+#     for i in data:
+#         if i.team_id not in team_data:
+#             team_data[i.team_id] = {
+#                 "team_id": i.team_id,
+#                 "teamName": i.team.teamName,
+#                 "logo": i.team.logo,
+#                 "players": [],
+#             }
+#         team_data[i.team_id]["players"].append(
+#             {
+#                 "id": i.id,
+#                 "player_id": i.player_id,
+#                 "player_name": i.player.player_name,
+#                 "game_id": i.player.game_id,
+#                 "captain": i.player.captain,
+#                 "is_joined": i.is_joined,
+#                 "kill": i.kill,
+#                 "rank": i.rank,
+#                 "is_dead": i.is_dead,
+#             }
+#         )
 
-# #     for team_id, team_info in team_data.items():
-# #         res.append(
-# #             {
-# #                 "team_id": team_id,
-# #                 "teamName": team_info["teamName"],
-# #                 "logo": team_info["logo"],
-# #                 "players": sorted(team_info["players"], key=lambda x: x["player_name"]),
-# #             }
-# #         )
+#     for team_id, team_info in team_data.items():
+#         res.append(
+#             {
+#                 "team_id": team_id,
+#                 "teamName": team_info["teamName"],
+#                 "logo": team_info["logo"],
+#                 "players": sorted(team_info["players"], key=lambda x: x["player_name"]),
+#             }
+#         )
 
-# #     return res
+#     return res
+
 
 # @router.get("/getTeams/{matchId}/{teamsId}")
 # def getTeams(matchId: UUID, teamsId: str, db: Session = Depends(get_db)):
