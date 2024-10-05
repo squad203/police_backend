@@ -152,6 +152,7 @@ def register_team(
     )
     db.add(newTeam)
     db.commit()
+    db.refresh(newTeam)
     background.add_task(
         send_email,
         f"Team Registration {team.team_name}",
