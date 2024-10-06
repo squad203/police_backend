@@ -10,6 +10,7 @@ from fastapi import (
     Query,
     UploadFile,
 )
+from fastapi.responses import FileResponse
 import requests
 from pydantic import EmailStr
 
@@ -126,6 +127,11 @@ def check_already_register_player_with_id(
         )
 
 
+@router.get("/logo/{file_name}")
+def get_logo(file_name: str):
+    return FileResponse(f"media/{file_name}")
+
+
 @router.post("/register/team")
 def register_team(
     background: BackgroundTasks,
@@ -230,6 +236,15 @@ def get_all_team(completed: bool = Query(False), db: Session = Depends(get_db)):
     teams = db.query(TeamTable).all()
     res = []
     for team in teams:
+        verify = True
+        if len(team.players) == 0:
+            verify = False
+        else:
+
+            for i in team.players:
+                if not i.verified:
+                    verify = False
+                    break
         if completed:
             if len(team.players) >= 4:
                 res.append(
@@ -243,6 +258,8 @@ def get_all_team(completed: bool = Query(False), db: Session = Depends(get_db)):
                         "college": team.college,
                         "logo": team.logo,
                         "player": len(team.players) if team.players else 0,
+                        # "players": team.players,
+                        "verify": verify,
                     }
                 )
         else:
@@ -257,6 +274,8 @@ def get_all_team(completed: bool = Query(False), db: Session = Depends(get_db)):
                     "college": team.college,
                     "logo": team.logo,
                     "player": len(team.players) if team.players else 0,
+                    # "players": team.players,
+                    "verify": verify,
                 }
             )
     return res
@@ -288,21 +307,30 @@ def get_all_player(team_code: str = Query(None), db: Session = Depends(get_db)):
     return res
 
 
-@router.get("/verify/{player_id}")
+@router.get("/toggleVerification/{player_id}")
 def verify(
     player_id: uuid.UUID, background: BackgroundTasks, db: Session = Depends(get_db)
 ):
     player = db.query(PlayerTable).filter(PlayerTable.id == player_id).first()
     if not player:
         raise HTTPException(status_code=404, detail="Player Not Found")
-    player.verified = True
+    if player.verified == False:
+        background.add_task(
+            send_email,
+            f"Player Registration {player.player_name}",
+            f"Your Information is successfully verified by our team. <h2> || All the best for Tournament ||<h2> <br> <b>Best Regards<b><br><b>Drona Education Foundation</b>",
+            player.email,
+        )
+    if player.verified == True:
+        background.add_task(
+            send_email,
+            f"Player Registration {player.player_name}",
+            f"Information you provide for Free Fire Registration is not correct if you want to verify please fill correct information. <h2> || All the best for Tournament ||<h2> <br> <b>Best Regards<b><br><b>Drona Education Foundation</b>",
+            player.email,
+        )
+
+    player.verified = not player.verified
     db.commit()
-    background.add_task(
-        send_email,
-        f"Player Registration {player.player_name}",
-        f"Your Information is successfully verified by our team. <h2> || All the best for Tournament ||<h2> <br> <b>Best Regards<b><br><b>Drona Education Foundation</b>",
-        player.email,
-    )
     return player
 
 
@@ -315,12 +343,7 @@ def unVerify(
         raise HTTPException(status_code=404, detail="Player Not Found")
     player.verified = False
     db.commit()
-    background.add_task(
-        send_email,
-        f"Player Registration {player.player_name}",
-        f"Information you provide for Free Fire Registration is not correct if you want to verify please fill correct information. <h2> || All the best for Tournament ||<h2> <br> <b>Best Regards<b><br><b>Drona Education Foundation</b>",
-        player.email,
-    )
+
     return player
 
 
@@ -379,7 +402,21 @@ def get_team(team_code: str, db: Session = Depends(get_db)):
         "teamName": team.teamName,
         "teamCode": team.teamCode,
         "logo": team.logo,
-        "players": team.players,
+        "players": [
+            {
+                "id": i.id,
+                "player_name": i.player_name,
+                "mobile": i.mobile,
+                "email": i.email,
+                "age": i.age,
+                "city": i.city,
+                "college": i.college,
+                "discord": i.discord,
+                "gameInfo": i.game_info,
+                "verified": i.verified,
+            }
+            for i in team.players
+        ],
         "email": team.email,
         "mobile": team.mobile,
         "city": team.city,
