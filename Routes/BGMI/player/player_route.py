@@ -1,4 +1,7 @@
+from datetime import datetime
 import random
+import time
+from typing import List, Literal
 import uuid
 from fastapi import (
     APIRouter,
@@ -21,7 +24,8 @@ from sqlalchemy.orm import Session
 # from schemas import PlayerGameInfo, PlayerTable
 # from .player_model import GameInfo, PlayersRegister
 from db import get_db
-from schemas import PlayerGameInfo, PlayerTable, TeamTable
+from schemas import BgmiMatches, MatchTeams, PlayerGameInfo, PlayerTable, TeamTable
+from sheets import insertData
 from utils import send_email
 
 # from utils import get_password_hash
@@ -125,6 +129,296 @@ def check_already_register_player_with_id(
         raise HTTPException(
             status_code=422, detail="Player with same email number already Registered"
         )
+
+
+@router.post("/create/match")
+def createMatch(
+    # tournament_id: uuid.UUID = Form(...),
+    match_name: str = Form(...),
+    match_type: str = Form(...),
+    map: str = Form(...),
+    mode: str = Form(...),
+    match_date: datetime = Form(...),
+    db: Session = Depends(get_db),
+):
+    newMatch = BgmiMatches(
+        id=uuid.uuid4(),
+        # tournament_id=tournament_id,
+        match_name=match_name,
+        match_type=match_type,
+        map=map,
+        mode=mode,
+        match_status="pending",
+        match_date=match_date,
+    )
+    db.add(newMatch)
+    db.commit()
+    return newMatch
+
+
+@router.get("/get_all_match")
+def getAllMatch(db: Session = Depends(get_db)):
+    matches = db.query(BgmiMatches).all()
+    return matches
+
+
+def get_team_player(team_id: uuid.UUID, db: Session):
+    team = db.query(TeamTable).filter(TeamTable.id == team_id).first()
+    if not team:
+        raise HTTPException(status_code=404, detail="Team Not Found")
+    return team.players
+
+
+from fastapi import BackgroundTasks
+import random
+
+@router.get("/export_match_data/{match_id}")
+def get_match_data_for_sheet(
+    match_id: uuid.UUID, background: BackgroundTasks, db: Session = Depends(get_db)
+):
+    match = db.query(MatchTeams).filter(MatchTeams.match_id == match_id).all()
+    if not match:
+        raise HTTPException(status_code=404, detail="Match Not Found")
+    teams = {}
+    for i in match:
+        if i.team_id not in teams:
+            teams[i.team_id] = {
+                "team_id": i.team_id,
+                "team_name": i.team.teamName,
+                "team_code": i.team.teamCode,
+                "email": i.team.email,
+                "mobile": i.team.mobile,
+                "players": [],
+            }
+        teams[i.team_id]["players"].append(
+            {
+                "player_id": i.player_id,
+                "player_name": i.player.player_name,
+                "mobile": i.player.mobile,
+                "email": i.player.email,
+                "game_name": i.player.game_info[0].game_name,
+                "game_id": i.player.game_info[0].game_id,
+            }
+        )
+    teams_list = [i for i in teams.values()]
+    final_data = []
+    for i in teams_list:
+        final_data.append(["", "", i["team_name"], "", ""])
+        for j in i["players"]:
+            final_data.append(
+                [
+                    j["player_name"],
+                    j["mobile"],
+                    j["email"],
+                    j["game_name"],
+                    j["game_id"],
+                ]
+            )
+
+    background.add_task(insertData, f"{match[0].match.match_name.upper()}_{random.randint(10,999)}", final_data)
+    return final_data
+
+
+@router.post("/add/team")
+def addTeam(
+    match_id: uuid.UUID = Form(...),
+    team_id: uuid.UUID = Form(...),
+    # player_id: uuid.UUID = Form(...),
+    db: Session = Depends(get_db),
+):
+    team = get_team_player(team_id, db)
+    # check already added
+    match = (
+        db.query(MatchTeams)
+        .filter(MatchTeams.match_id == match_id, MatchTeams.team_id == team_id)
+        .first()
+    )
+    if match:
+        raise HTTPException(status_code=422, detail="Team Already Added")
+    for i in team:
+        newMatchTeam = MatchTeams(
+            id=uuid.uuid4(),
+            match_id=match_id,
+            team_id=team_id,
+            player_id=i.id,
+        )
+        db.add(newMatchTeam)
+
+    db.commit()
+    return {"message": "Team Added"}
+
+
+@router.get("/get_match/{match_id}")
+def getMatch(match_id: uuid.UUID, db: Session = Depends(get_db)):
+    match = db.query(BgmiMatches).filter(BgmiMatches.id == match_id).first()
+    if not match:
+        raise HTTPException(status_code=404, detail="Match Not Found")
+    return match
+
+
+@router.get("/get_match_team/{match_id}")
+def getMatchTeam(match_id: uuid.UUID, db: Session = Depends(get_db)):
+    match = db.query(MatchTeams).filter(MatchTeams.match_id == match_id).all()
+    if not match:
+        raise HTTPException(status_code=404, detail="Match Not Found")
+    teams = {}
+    for i in match:
+        if i.team_id not in teams:
+            teams[i.team_id] = []
+        teams[i.team_id].append(
+            {
+                "player_id": i.player_id,
+                "player_name": i.player.player_name,
+                "mobile": i.player.mobile,
+                "email": i.player.email,
+                "game_name": i.player.game_info[0].game_name,
+                "game_id": i.player.game_info[0].game_id,
+            }
+        )
+    teams_list = [
+        {
+            "team_id": i.team_id,
+            "team_name": i.team.teamName,
+            "team_code": i.team.teamCode,
+            "email": i.team.email,
+            "mobile": i.team.mobile,
+            "players": teams[i.team_id],
+        }
+        for i in match
+    ]
+
+    return {
+        "match_id": match_id,
+        "match_name": match[0].match.match_name,
+        "match_type": match[0].match.match_type,
+        "map": match[0].match.map,
+        "mode": match[0].match.mode,
+        "match_date": match[0].match.match_date,
+        "teams": teams_list,
+    }
+
+
+@router.get("/match_kill/{match_id}/{team_id}/{player_id}")
+def addKill(
+    type: Literal["add", "remove"],
+    match_id: uuid.UUID,
+    team_id: uuid.UUID,
+    player_id: uuid.UUID,
+    db: Session = Depends(get_db),
+):
+    match = (
+        db.query(MatchTeams)
+        .filter(
+            MatchTeams.match_id == match_id,
+            MatchTeams.team_id == team_id,
+            MatchTeams.player_id == player_id,
+        )
+        .first()
+    )
+    if not match:
+        raise HTTPException(status_code=404, detail="Match Not Found")
+    if not match.kill:
+        match.kill = 1 if type == "add" else 0
+    match.kill = match.kill + 1 if type == "add" else match.kill - 1
+    db.commit()
+    return match
+
+
+@router.put("/match/toggleIsDead")
+def toggleIsDead(player_id: uuid.UUID, db: Session = Depends(get_db)):
+    player = db.query(MatchTeams).filter(MatchTeams.id == player_id).first()
+    if not player:
+        raise HTTPException(status_code=404, detail="Player Not Found")
+    if not player.is_dead:
+        player.dead_at = datetime.now()
+    player.is_dead = not player.is_dead
+    db.commit()
+    return {"message": "Is Dead Toggled"}
+
+
+@router.get("/getTeamsRanking")
+def getTeams(match_id: uuid.UUID, db: Session = Depends(get_db)) -> List[dict]:
+    data = db.query(MatchTeams).filter(MatchTeams.match_id == match_id).all()
+    res = []
+    team_data = {}
+    for i in data:
+        if i.team_id not in team_data:
+            team_data[i.team_id] = {
+                "team_id": i.team_id,
+                "teamName": i.team.teamName,
+                "logo": i.team.logo,
+                "rank": i.team.rank,
+                "players": [],
+                "alive": 0,
+                "dead_at": None,
+                "kill": 0,
+            }
+        if not i.is_dead:
+            team_data[i.team_id]["alive"] += 1
+        else:
+            if team_data[i.team_id]["dead_at"] is None:
+                team_data[i.team_id]["dead_at"] = i.dead_at
+            else:
+                team_data[i.team_id]["dead_at"] = max(
+                    i.dead_at, team_data[i.team_id]["dead_at"]
+                )
+        if i.kill:
+            team_data[i.team_id]["kill"] += i.kill
+        team_data[i.team_id]["players"].append(
+            {
+                "is_dead": i.is_dead,
+            }
+        )
+
+    for team_id, team_info in team_data.items():
+        res.append(
+            {
+                "team_id": team_id,
+                "teamName": team_info["teamName"],
+                "logo": team_info["logo"],
+                "kill": team_info["kill"],
+                "players": team_info["alive"],
+                "dead_at": team_info["dead_at"],
+                "is_eliminated": False if team_info["alive"] > 0 else True,
+                "alive": sorted(team_info["players"], key=lambda x: x["is_dead"]),
+            }
+        )
+
+    def sort_key(item):
+        # Convert dead_at to a timestamp or use float('inf') if it is None
+        dead_at_timestamp = (
+            item["dead_at"].timestamp() if item["dead_at"] is not None else float("inf")
+        )
+        return (-item["players"], -item["kill"], -dead_at_timestamp)
+
+    res.sort(key=sort_key)
+    return res
+
+
+# @router.get("/send_mail_to_team")
+# def send_main_to_data(db: Session = Depends(get_db)):
+#     teams = (
+#         db.query(TeamTable)
+#         .filter(
+#             TeamTable.teamCode.in_(
+#                 [
+#                     "DFT7650ODA68",
+#                 ]
+#             )
+#         )
+#         .all()
+#     )
+
+#     for team in teams:
+#         send_email(
+#             "Team Registration",
+#             f"<b>Dear Team {team.teamName}</b>, <br>Complete Your Team Registration By Clicking Bellow Button <br> <a href='https://bgmiform.netlify.app/#/team_page/{team.teamCode}'>Click to complete registration</a><br><h3> || All the best for Tournament ||<h3> <br> <b>Best Regards<b><br><b>Drona Education Foundation</b>",
+#             team.email,
+#         )
+#         print(f"https://bgmiform.netlify.app/#/team_page/{team.teamCode}")
+#         time.sleep(10)
+
+#     return teams
 
 
 @router.get("/logo/{file_name}")

@@ -111,7 +111,7 @@ def send_email(subject, body, email):
 
         for recipient_email in batch:
             msg = MIMEMultipart()
-            msg["From"] = f"FF Registration <{sender_email}>"
+            msg["From"] = f"Drona Gaming League <{sender_email}>"
             msg["To"] = recipient_email
             msg["Subject"] = subject
             msg.attach(MIMEText(body, "html"))

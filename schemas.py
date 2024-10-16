@@ -73,7 +73,7 @@ class TournamentTable(Base):
     updated_at = Column(TIMESTAMP(timezone=True), server_default=text("now()"))
 
     # team = relationship("TeamTable", back_populates="tournament")
-    matches = relationship("BgmiMatches", back_populates="tournament")
+    # matches = relationship("BgmiMatches", back_populates="tournament")
     # end_date = Column(DateTime)
     # mode = Column(String)
     # map = Column(String)
@@ -88,19 +88,20 @@ class BgmiMatches(Base):
     __tablename__ = "bgmi_matches"
 
     id = Column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
-    tournament_id = Column(UUID(as_uuid=True), ForeignKey("tournaments.id"))
+    # tournament_id = Column(UUID(as_uuid=True), ForeignKey("tournaments.id"))
     match_name = Column(String)
     match_type = Column(String)
     map = Column(String)
     mode = Column(String)
     match_date = Column(DateTime)
+
     # mvp_player_id = Column(
     #     UUID(as_uuid=True), ForeignKey("bgmi_players.id"), nullable=True
     # )
     match_status = Column(String, server_default=text("pending"))
     created_at = Column(TIMESTAMP(timezone=True), server_default=text("now()"))
 
-    tournament = relationship("TournamentTable", back_populates="matches")
+    # tournament = relationship("TournamentTable", back_populates="matches")
     matchTeam = relationship("MatchTeams", back_populates="match")
 
 
@@ -110,7 +111,7 @@ class MatchTeams(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
     match_id = Column(UUID(as_uuid=True), ForeignKey("bgmi_matches.id"))
     team_id = Column(UUID(as_uuid=True), ForeignKey("teams.id"))
-    # player_id = Column(UUID(as_uuid=True), ForeignKey("bgmi_players.id"))
+    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"))
     is_joined = Column(Boolean, server_default=text("false"))
     kill = Column(Integer, server_default=text("0"))
     rank = Column(Integer, server_default=text("0"))
@@ -119,7 +120,8 @@ class MatchTeams(Base):
     created_at = Column(TIMESTAMP(timezone=True), server_default=text("now()"))
 
     match = relationship("BgmiMatches", back_populates="matchTeam")
-    # team = relationship("TeamTable", back_populates="match")
+    team = relationship("TeamTable", back_populates="match")
+    player = relationship("PlayerTable", back_populates="match")
 
 
 class PlayerGameInfo(Base):
@@ -154,7 +156,7 @@ class TeamTable(Base):
     created_at = Column(TIMESTAMP(timezone=True), server_default=text("now()"))
 
     # tournament = relationship("TournamentTable", back_populates="team")
-    # match = relationship("MatchTeams", back_populates="team")
+    match = relationship("MatchTeams", back_populates="team")
     players = relationship("PlayerTable", back_populates="team")
 
 
@@ -179,3 +181,4 @@ class PlayerTable(Base):
 
     game_info = relationship("PlayerGameInfo", back_populates="player")
     team = relationship("TeamTable", back_populates="players")
+    match = relationship("MatchTeams", back_populates="player")
