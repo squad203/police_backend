@@ -158,7 +158,28 @@ def createMatch(
 
 @router.get("/get_all_match")
 def getAllMatch(db: Session = Depends(get_db)):
-    matches = db.query(BgmiMatches).all()
+    matches = db.query(BgmiMatches).order_by(BgmiMatches.created_at.desc()).all()
+    res = []
+
+    for i in matches:
+        teamCount = (
+            db.query(MatchTeams.team_id.distinct())
+            .filter(MatchTeams.match_id == i.id)
+            .count()
+        )
+        res.append(
+            {
+                "id": i.id,
+                "match_name": i.match_name,
+                "match_type": i.match_type,
+                "map": i.map,
+                "mode": i.mode,
+                "match_date": i.match_date,
+                "match_status": i.match_status,
+                "teams": teamCount,
+            }
+        )
+    return res
     return matches
 
 
@@ -171,6 +192,7 @@ def get_team_player(team_id: uuid.UUID, db: Session):
 
 from fastapi import BackgroundTasks
 import random
+
 
 @router.get("/export_match_data/{match_id}")
 def get_match_data_for_sheet(
@@ -215,7 +237,11 @@ def get_match_data_for_sheet(
                 ]
             )
 
-    background.add_task(insertData, f"{match[0].match.match_name.upper()}_{random.randint(10,999)}", final_data)
+    background.add_task(
+        insertData,
+        f"{match[0].match.match_name.upper()}_{random.randint(10,999)}",
+        final_data,
+    )
     return final_data
 
 
@@ -298,20 +324,16 @@ def getMatchTeam(match_id: uuid.UUID, db: Session = Depends(get_db)):
     }
 
 
-@router.get("/match_kill/{match_id}/{team_id}/{player_id}")
+@router.put("/match_kill/")
 def addKill(
     type: Literal["add", "remove"],
-    match_id: uuid.UUID,
-    team_id: uuid.UUID,
     player_id: uuid.UUID,
     db: Session = Depends(get_db),
 ):
     match = (
         db.query(MatchTeams)
         .filter(
-            MatchTeams.match_id == match_id,
-            MatchTeams.team_id == team_id,
-            MatchTeams.player_id == player_id,
+            MatchTeams.id == player_id,
         )
         .first()
     )
@@ -322,6 +344,54 @@ def addKill(
     match.kill = match.kill + 1 if type == "add" else match.kill - 1
     db.commit()
     return match
+
+
+@router.get("/getTeams/{matchId}/{teamsId}")
+def getTeams(matchId: uuid.UUID, teamsId: str, db: Session = Depends(get_db)):
+    teamsId = teamsId.split(",")
+    data = []
+    if matchId:
+        data = (
+            db.query(MatchTeams)
+            .filter(MatchTeams.match_id == matchId, MatchTeams.team_id.in_(teamsId))
+            .all()
+        )
+
+    res = []
+    team_data = {}
+    for i in data:
+        if i.team_id not in team_data:
+            team_data[i.team_id] = {
+                "team_id": i.team_id,
+                "teamName": i.team.teamName,
+                "logo": i.team.logo,
+                "players": [],
+            }
+        team_data[i.team_id]["players"].append(
+            {
+                "id": i.id,
+                "plater_id": i.player_id,
+                "player_name": i.player.player_name,
+                "game_id": i.player.game_info[0].game_id,
+                "is_joined": i.is_joined,
+                "kill": i.kill,
+                "rank": i.rank,
+                "is_dead": i.is_dead,
+            }
+        )
+
+    print(team_data)
+
+    for team_id, team_info in team_data.items():
+        res.append(
+            {
+                "team_id": team_id,
+                "teamName": team_info["teamName"],
+                "logo": team_info["logo"],
+                "players": sorted(team_info["players"], key=lambda x: x["player_name"]),
+            }
+        )
+    return sorted(res, key=lambda x: x["teamName"])
 
 
 @router.put("/match/toggleIsDead")
@@ -346,6 +416,7 @@ def getTeams(match_id: uuid.UUID, db: Session = Depends(get_db)) -> List[dict]:
             team_data[i.team_id] = {
                 "team_id": i.team_id,
                 "teamName": i.team.teamName,
+                "teamCode": i.team.teamCode,
                 "logo": i.team.logo,
                 "rank": i.team.rank,
                 "players": [],
@@ -375,6 +446,7 @@ def getTeams(match_id: uuid.UUID, db: Session = Depends(get_db)) -> List[dict]:
             {
                 "team_id": team_id,
                 "teamName": team_info["teamName"],
+                "teamCode": team_info["teamCode"],
                 "logo": team_info["logo"],
                 "kill": team_info["kill"],
                 "players": team_info["alive"],
@@ -393,6 +465,119 @@ def getTeams(match_id: uuid.UUID, db: Session = Depends(get_db)) -> List[dict]:
 
     res.sort(key=sort_key)
     return res
+
+
+@router.get("/getTeamsRankingForLast")
+def getTeams(match_id: uuid.UUID, db: Session = Depends(get_db)) -> List[dict]:
+    data = db.query(MatchTeams).filter(MatchTeams.match_id == match_id).all()
+    res = []
+    team_data = {}
+    for i in data:
+        if i.team_id not in team_data:
+            team_data[i.team_id] = {
+                "team_id": i.team_id,
+                "teamName": i.team.teamName,
+                "teamCode": i.team.teamCode,
+                "logo": i.team.logo,
+                "rank": i.rank,
+                "kill": 0,
+            }
+
+        if i.kill:
+            team_data[i.team_id]["kill"] += i.kill
+
+    for team_id, team_info in team_data.items():
+        res.append(
+            {
+                "team_id": team_id,
+                "teamName": team_info["teamName"],
+                "teamCode": team_info["teamCode"],
+                "logo": team_info["logo"],
+                "kill": team_info["kill"],
+                "rank": team_info["rank"],
+            }
+        )
+
+    res.sort(key=lambda x: x["rank"])
+    return res
+
+
+@router.get("/updateTeamsRankingByKills")
+def updateTeamsRankingByKills(
+    match_id: uuid.UUID, db: Session = Depends(get_db)
+) -> List[dict]:
+    data = db.query(MatchTeams).filter(MatchTeams.match_id == match_id).all()
+    res = []
+    team_data = {}
+
+    # Collect data and accumulate kills for each team
+    for i in data:
+        if i.team_id not in team_data:
+            team_data[i.team_id] = {
+                "team_id": i.team_id,
+                "teamName": i.team.teamName,
+                "teamCode": i.team.teamCode,
+                "logo": i.team.logo,
+                "kill": 0,
+            }
+
+        if i.kill:
+            team_data[i.team_id]["kill"] += i.kill
+
+    # Convert team data to a list and sort it by kills in descending order
+    sorted_teams = sorted(team_data.values(), key=lambda x: x["kill"], reverse=True)
+
+    # Assign ranks based on the number of kills and update the database
+    for idx, team_info in enumerate(sorted_teams, start=1):
+        team_info["rank"] = idx
+
+        # Update the rank in the database
+        db.query(MatchTeams).filter(
+            MatchTeams.team_id == team_info["team_id"], MatchTeams.match_id == match_id
+        ).update({"rank": team_info["rank"]})
+        res.append(
+            {
+                "team_id": team_info["team_id"],
+                "teamName": team_info["teamName"],
+                "teamCode": team_info["teamCode"],
+                "logo": team_info["logo"],
+                "kill": team_info["kill"],
+                "rank": team_info["rank"],
+            }
+        )
+
+    # Commit the changes to the database
+    db.commit()
+
+    return res
+
+
+@router.put("/match/updateRank")
+def updateRank(
+    team_id: uuid.UUID,
+    match_id: uuid.UUID,
+    rank: int,
+    db: Session = Depends(get_db),
+):
+    existing_rank = (
+        db.query(MatchTeams)
+        .filter(MatchTeams.rank == rank, MatchTeams.match_id == match_id)
+        .all()
+    )
+    player = (
+        db.query(MatchTeams)
+        .filter(MatchTeams.team_id == team_id, MatchTeams.match_id == match_id)
+        .all()
+    )
+    if not player:
+        raise HTTPException(status_code=404, detail="Player Not Found")
+    if len(existing_rank) > 1:
+        for i in existing_rank:
+            i.rank = player[0].rank
+    for i in player:
+        i.rank = rank
+    db.commit()
+    return {"message": "Rank Updated"}
 
 
 # @router.get("/send_mail_to_team")
