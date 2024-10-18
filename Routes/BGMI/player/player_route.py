@@ -559,6 +559,8 @@ def updateRank(
     rank: int,
     db: Session = Depends(get_db),
 ):
+    if rank < 1:
+        rank = 1
     existing_rank = (
         db.query(MatchTeams)
         .filter(MatchTeams.rank == rank, MatchTeams.match_id == match_id)
