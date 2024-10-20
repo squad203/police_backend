@@ -6,6 +6,7 @@ import uuid
 from fastapi import (
     APIRouter,
     BackgroundTasks,
+    Body,
     Depends,
     File,
     Form,
@@ -183,11 +184,12 @@ def getAllMatch(db: Session = Depends(get_db)):
     return matches
 
 
-def get_team_player(team_id: uuid.UUID, db: Session):
-    team = db.query(TeamTable).filter(TeamTable.id == team_id).first()
+def get_team_player(team_id: str, db: Session):
+    print(team_id)
+    team = db.query(TeamTable).filter(TeamTable.teamCode == team_id).first()
     if not team:
         raise HTTPException(status_code=404, detail="Team Not Found")
-    return team.players
+    return team
 
 
 from fastapi import BackgroundTasks
@@ -248,29 +250,30 @@ def get_match_data_for_sheet(
 @router.post("/add/team")
 def addTeam(
     match_id: uuid.UUID = Form(...),
-    team_id: uuid.UUID = Form(...),
+    team_ids: str = Body(...),
     # player_id: uuid.UUID = Form(...),
     db: Session = Depends(get_db),
 ):
-    team = get_team_player(team_id, db)
-    # check already added
-    match = (
-        db.query(MatchTeams)
-        .filter(MatchTeams.match_id == match_id, MatchTeams.team_id == team_id)
-        .first()
-    )
-    if match:
-        raise HTTPException(status_code=422, detail="Team Already Added")
-    for i in team:
-        newMatchTeam = MatchTeams(
-            id=uuid.uuid4(),
-            match_id=match_id,
-            team_id=team_id,
-            player_id=i.id,
+    team_ids = team_ids.split(",")
+    for team_id in team_ids:
+        team = get_team_player(team_id, db)
+        match = (
+            db.query(MatchTeams)
+            .filter(MatchTeams.match_id == match_id, MatchTeams.team_id == team.id)
+            .first()
         )
-        db.add(newMatchTeam)
-
-    db.commit()
+        if match:
+            print("Already Added")
+            continue
+        for i in team.players:
+            newMatchTeam = MatchTeams(
+                id=uuid.uuid4(),
+                match_id=match_id,
+                team_id=team.id,
+                player_id=i.id,
+            )
+            db.add(newMatchTeam)
+        db.commit()
     return {"message": "Team Added"}
 
 
@@ -450,7 +453,7 @@ def getTeams(match_id: uuid.UUID, db: Session = Depends(get_db)) -> List[dict]:
                 "logo": team_info["logo"],
                 "kill": team_info["kill"],
                 "players": team_info["alive"],
-                "dead_at": team_info["dead_at"],
+                "dead_at": team_info["dead_at"] if team_info["alive"] == 0 else None,
                 "is_eliminated": False if team_info["alive"] > 0 else True,
                 "alive": sorted(team_info["players"], key=lambda x: x["is_dead"]),
             }
