@@ -377,6 +377,7 @@ def getTeams(matchId: uuid.UUID, teamsId: str, db: Session = Depends(get_db)):
                 "plater_id": i.player_id,
                 "player_name": i.player.player_name,
                 "game_id": i.player.game_info[0].game_id,
+                "game_name": i.player.game_info[0].game_name,
                 "is_joined": i.is_joined,
                 "kill": i.kill,
                 "rank": i.rank,
