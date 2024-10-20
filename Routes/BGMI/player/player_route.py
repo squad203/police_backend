@@ -344,7 +344,8 @@ def addKill(
         raise HTTPException(status_code=404, detail="Match Not Found")
     if not match.kill:
         match.kill = 1 if type == "add" else 0
-    match.kill = match.kill + 1 if type == "add" else match.kill - 1
+    else:
+        match.kill = match.kill + 1 if type == "add" else match.kill - 1
     db.commit()
     return match
 
